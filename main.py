@@ -20,7 +20,7 @@ COLS = {'value': 'Наименование', 'full_name': 'Полное наим
 
 #==============================================================================#
 
-def get_smb(data):
+def get_smb(data: dict):
     docs = data.get('documents', None)
     if not docs: return ''
     smb = docs.get('smb', None)
@@ -35,7 +35,7 @@ def get_smb(data):
         return 'Средний бизнес'
     return ''
 
-def get_phones(data, key='phones'):
+def get_phones(data: dict, key: str = 'phones'):
     phones = data.get(key, None)
     if not phones: return ''
     out = []
@@ -51,13 +51,13 @@ def get_phones(data, key='phones'):
             out.append(phone_data['source'])
     return ', '.join(out) if out else ''
 
-def get_okved(data):
+def get_okved(data: dict):
     okveds = data.get('okveds', None)
     if not okveds:
         return data.get('okved', '')
     return ', '.join(f"{okved['code']} ({okved['name']})" for okved in okveds)
 
-def get_manager_name(data):
+def get_manager_name(data: dict):
     management = data.get('management', None)
     if data['type'] == 'INDIVIDUAL':
         try:
@@ -66,12 +66,12 @@ def get_manager_name(data):
             return management.get('name', '') if management else ''
     return management.get('name', '') if management else ''
 
-def get_founders(data):
+def get_founders(data: dict):
     founders = data.get('founders', None)
     if not founders: return ''
     return ', '.join(f"{founder['name']}{(' (' + founder['share']['value'] + '%)') if 'share' in founder and founder['share']['value'] else ''}" for founder in founders)
 
-def get_state(data):
+def get_state(data: dict):
     state = data.get('state', None)
     if not state: return ''
     if state['status'] == 'ACTIVE':
@@ -86,27 +86,37 @@ def get_state(data):
         return 'В процессе присоединения к другому юрлицу'
     return ''
 
-def get_date(data, key, formatstr=r'%Y-%m-%d'):
+def get_date(data: dict, key: str, formatstr: str = r'%Y-%m-%d'):
     date_ = data.get(key, None)
     if not date_: return ''
     date_ = int(date_) / 1000
     return datetime.utcfromtimestamp(date_).strftime(formatstr)
 
-def get_capital(data):
+def get_capital(data: dict):
     capital = data.get('capital', None)
     if not capital: return ''
     return f"{capital['value']} ({capital['type']})"
 
+async def get_coords(address: str, client: Dadata = None):
+    if not address: return ''
+    if client is None:
+        async with Dadata(APIKEY, APISEC) as client:
+            result = await client.clean('address', address)
+    else:
+        result = await client.clean('address', address)
+    if not result: return ''
+    return f"{result['geo_lat']}, {result['geo_lon']}"
+
 #==============================================================================#
 
-def process_result(data):
+def process_result(data: dict):
     finance = data.get('finance', None)
     out = {'value': data['value'], 
            'full_name': data['name'].get('full_with_opf', ''), 
            'type': 'Юридическое лицо' if data['type'] == 'LEGAL' else 'ИП',
            'opf': f"{data['opf']['short']} ({data['opf']['full']})",
            'smb': get_smb(data),
-           'address': data['address']['value'],
+           'address': data['address'].get('value', '') if data.get('address', None) else '',
            'coords': '',
            'phones': get_phones(data),
            'emails': get_phones(data, 'emails'),
@@ -156,7 +166,9 @@ async def main():
                     records.append({k: (company if k == 'value' else '') for k in COLS.keys()})
                     continue
                 res = res['data'] | {'value': res['value']}
-                records.append(process_result(res))
+                res = process_result(res)
+                res['coords'] = await get_coords(res['address'], client)
+                records.append(res)
 
         df = pd.DataFrame.from_records(records, columns=list(COLS.keys()))
         df.rename(columns=COLS, inplace=True)

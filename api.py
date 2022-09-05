@@ -22,17 +22,11 @@ class Dadata(DadataAsync):
             return results[0] if results else None
         return results
 
-    async def validate(self, name: str, query: str) -> Optional[dict]:
-        return await super().clean(name, query)
-
     async def geolocate(self, name: str, lat: float, lon: float, single: bool = False, **kwargs) -> Union[list[dict], Optional[dict]]:
         results = await super().geolocate(name, lat, lon, **kwargs)
         if single:
             return results[0] if results else None
         return results
-
-    async def iplocate(self, query: str, **kwargs) -> Optional[dict]:
-        return await super().iplocate(query, **kwargs)
 
     # ----------------------------------------------------------------- #
 
